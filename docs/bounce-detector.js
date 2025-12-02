@@ -11,6 +11,11 @@ class BounceDetector {
         this.baselineZ = 9.81; // Earth's gravity
         this.calibrationSamples = [];
         this.isCalibrating = false;
+        // Audio properties
+        this.audioContext = null;
+        this.oscillator = null;
+        this.gainNode = null;
+        this.isAudioInitialized = false;
         // UI Elements
         this.statusEl = null;
         this.indicatorEl = null;
@@ -20,6 +25,9 @@ class BounceDetector {
         this.calibrateBtn = null;
         this.bounceCountEl = null;
         this.currentAccelEl = null;
+        this.audioModeSelect = null;
+        this.audioVolumeSlider = null;
+        this.audioVolumeValue = null;
         this.bounceCount = 0;
         this.permissionGranted = false;
         this.handleMotion = (event) => {
@@ -41,6 +49,12 @@ class BounceDetector {
                 }
                 return;
             }
+            // Calculate deviation for frequency feedback
+            const deviation = Math.abs(z - this.baselineZ);
+            // Update frequency audio feedback (continuous)
+            if (this.config.audioMode === 'frequency') {
+                this.updateFrequencyFromDeviation(deviation);
+            }
             // Add sample to buffer
             this.samples.push({ timestamp: now, z });
             // Keep only recent samples
@@ -57,6 +71,8 @@ class BounceDetector {
             debounceTime: 300, // 300ms between detections
             vibrationDuration: 100, // 100ms vibration
             sampleWindow: 10, // Analyze last 10 samples
+            audioMode: 'off', // Audio feedback off by default
+            audioVolume: 0.5, // 50% volume by default
             ...config
         };
     }
@@ -75,6 +91,9 @@ class BounceDetector {
         this.calibrateBtn = document.getElementById('calibrate-btn');
         this.bounceCountEl = document.getElementById('bounce-count');
         this.currentAccelEl = document.getElementById('current-accel');
+        this.audioModeSelect = document.getElementById('audio-mode');
+        this.audioVolumeSlider = document.getElementById('audio-volume');
+        this.audioVolumeValue = document.getElementById('audio-volume-value');
     }
     setupEventListeners() {
         this.startBtn?.addEventListener('click', () => this.toggleDetection());
@@ -84,6 +103,23 @@ class BounceDetector {
             this.config.sensitivity = value;
             if (this.sensitivityValue) {
                 this.sensitivityValue.textContent = value.toFixed(1);
+            }
+            this.saveSettings();
+        });
+        this.audioModeSelect?.addEventListener('change', (e) => {
+            const mode = e.target.value;
+            this.config.audioMode = mode;
+            this.handleAudioModeChange();
+            this.saveSettings();
+        });
+        this.audioVolumeSlider?.addEventListener('input', (e) => {
+            const value = parseFloat(e.target.value);
+            this.config.audioVolume = value;
+            if (this.audioVolumeValue) {
+                this.audioVolumeValue.textContent = Math.round(value * 100).toString();
+            }
+            if (this.gainNode) {
+                this.gainNode.gain.value = value;
             }
             this.saveSettings();
         });
@@ -144,6 +180,10 @@ class BounceDetector {
         this.bounceCount = 0;
         this.updateBounceCount();
         window.addEventListener('devicemotion', this.handleMotion);
+        // Start frequency audio if in frequency mode
+        if (this.config.audioMode === 'frequency') {
+            this.startFrequencyAudio();
+        }
         if (this.startBtn) {
             this.startBtn.textContent = 'Stop Detection';
             this.startBtn.classList.add('active');
@@ -153,6 +193,8 @@ class BounceDetector {
     stopDetection() {
         this.isRunning = false;
         window.removeEventListener('devicemotion', this.handleMotion);
+        // Stop frequency audio
+        this.stopFrequencyAudio();
         if (this.startBtn) {
             this.startBtn.textContent = 'Start Detection';
             this.startBtn.classList.remove('active');
@@ -187,6 +229,106 @@ class BounceDetector {
         if ('vibrate' in navigator) {
             navigator.vibrate(this.config.vibrationDuration);
         }
+        // Discrete audio feedback (buzz on bounce detection)
+        if (this.config.audioMode === 'discrete') {
+            this.playDiscreteBuzz();
+        }
+    }
+    initAudio() {
+        if (this.isAudioInitialized)
+            return;
+        try {
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            this.gainNode = this.audioContext.createGain();
+            this.gainNode.connect(this.audioContext.destination);
+            this.gainNode.gain.value = this.config.audioVolume;
+            this.isAudioInitialized = true;
+        }
+        catch (e) {
+            console.warn('Web Audio API not supported:', e);
+        }
+    }
+    handleAudioModeChange() {
+        if (this.config.audioMode !== 'off' && !this.isAudioInitialized) {
+            this.initAudio();
+        }
+        // Stop frequency audio if switching away from frequency mode
+        if (this.config.audioMode !== 'frequency') {
+            this.stopFrequencyAudio();
+        }
+        // Start frequency audio if switching to frequency mode and detection is running
+        if (this.config.audioMode === 'frequency' && this.isRunning) {
+            this.startFrequencyAudio();
+        }
+    }
+    startFrequencyAudio() {
+        if (!this.audioContext || !this.gainNode) {
+            this.initAudio();
+        }
+        if (!this.audioContext || !this.gainNode)
+            return;
+        // Resume audio context if suspended (needed for browsers with autoplay policies)
+        if (this.audioContext.state === 'suspended') {
+            this.audioContext.resume();
+        }
+        // Stop existing oscillator if any
+        this.stopFrequencyAudio();
+        // Create oscillator for continuous frequency feedback
+        this.oscillator = this.audioContext.createOscillator();
+        this.oscillator.type = 'sine';
+        this.oscillator.frequency.value = 200; // Base frequency in Hz
+        this.oscillator.connect(this.gainNode);
+        this.oscillator.start();
+    }
+    stopFrequencyAudio() {
+        if (this.oscillator) {
+            try {
+                this.oscillator.stop();
+                this.oscillator.disconnect();
+            }
+            catch (e) {
+                // Oscillator might already be stopped
+            }
+            this.oscillator = null;
+        }
+    }
+    updateFrequencyFromDeviation(deviation) {
+        if (!this.oscillator || this.config.audioMode !== 'frequency')
+            return;
+        // Map deviation to frequency:
+        // - 0 deviation = 200 Hz (low, calm)
+        // - max deviation (e.g., 10 m/s²) = 1000 Hz (high, alert)
+        // Using a non-linear mapping for better perception
+        const minFreq = 200;
+        const maxFreq = 1000;
+        const maxDeviation = 10; // Maximum expected deviation in m/s²
+        const normalizedDeviation = Math.min(deviation / maxDeviation, 1);
+        const frequency = minFreq + (maxFreq - minFreq) * normalizedDeviation;
+        // Smooth frequency transition
+        this.oscillator.frequency.setTargetAtTime(frequency, this.audioContext.currentTime, 0.05 // Time constant for smooth transition
+        );
+    }
+    playDiscreteBuzz() {
+        if (!this.audioContext || !this.gainNode) {
+            this.initAudio();
+        }
+        if (!this.audioContext || !this.gainNode)
+            return;
+        // Resume audio context if suspended
+        if (this.audioContext.state === 'suspended') {
+            this.audioContext.resume();
+        }
+        // Create a short buzz sound
+        const buzzOscillator = this.audioContext.createOscillator();
+        const buzzGain = this.audioContext.createGain();
+        buzzOscillator.type = 'square';
+        buzzOscillator.frequency.value = 440; // A4 note
+        buzzGain.gain.value = this.config.audioVolume;
+        buzzGain.gain.setTargetAtTime(0, this.audioContext.currentTime + 0.1, 0.02);
+        buzzOscillator.connect(buzzGain);
+        buzzGain.connect(this.audioContext.destination);
+        buzzOscillator.start();
+        buzzOscillator.stop(this.audioContext.currentTime + 0.15);
     }
     showBounceIndicator() {
         if (this.indicatorEl) {
@@ -240,7 +382,9 @@ class BounceDetector {
     saveSettings() {
         const settings = {
             sensitivity: this.config.sensitivity,
-            baselineZ: this.baselineZ
+            baselineZ: this.baselineZ,
+            audioMode: this.config.audioMode,
+            audioVolume: this.config.audioVolume
         };
         localStorage.setItem('bounceDetectorSettings', JSON.stringify(settings));
     }
@@ -260,6 +404,21 @@ class BounceDetector {
                 }
                 if (settings.baselineZ !== undefined) {
                     this.baselineZ = settings.baselineZ;
+                }
+                if (settings.audioMode !== undefined) {
+                    this.config.audioMode = settings.audioMode;
+                    if (this.audioModeSelect) {
+                        this.audioModeSelect.value = settings.audioMode;
+                    }
+                }
+                if (settings.audioVolume !== undefined) {
+                    this.config.audioVolume = settings.audioVolume;
+                    if (this.audioVolumeSlider) {
+                        this.audioVolumeSlider.value = settings.audioVolume.toString();
+                    }
+                    if (this.audioVolumeValue) {
+                        this.audioVolumeValue.textContent = Math.round(settings.audioVolume * 100).toString();
+                    }
                 }
             }
         }
