@@ -172,6 +172,15 @@ class BounceDetector {
       if (!granted) return;
     }
 
+    // Initialize and resume audio context during user gesture
+    // This is critical for browser autoplay policies
+    if (this.config.audioMode !== 'off') {
+      this.initAudio();
+      if (this.audioContext && this.audioContext.state === 'suspended') {
+        await this.audioContext.resume();
+      }
+    }
+
     this.isRunning = true;
     this.bounceCount = 0;
     this.updateBounceCount();
@@ -309,9 +318,13 @@ class BounceDetector {
     }
   }
 
-  private handleAudioModeChange(): void {
+  private async handleAudioModeChange(): Promise<void> {
     if (this.config.audioMode !== 'off' && !this.isAudioInitialized) {
       this.initAudio();
+      // Resume audio context during user gesture (dropdown change)
+      if (this.audioContext && this.audioContext.state === 'suspended') {
+        await this.audioContext.resume();
+      }
     }
 
     // Stop frequency audio if switching away from frequency modes
@@ -325,7 +338,7 @@ class BounceDetector {
     }
   }
 
-  private startFrequencyAudio(): void {
+  private async startFrequencyAudio(): Promise<void> {
     if (!this.audioContext || !this.gainNode) {
       this.initAudio();
     }
@@ -334,7 +347,7 @@ class BounceDetector {
 
     // Resume audio context if suspended (needed for browsers with autoplay policies)
     if (this.audioContext.state === 'suspended') {
-      this.audioContext.resume();
+      await this.audioContext.resume();
     }
 
     // Stop existing oscillator if any
@@ -447,7 +460,7 @@ class BounceDetector {
 
     // Resume audio context if suspended
     if (this.audioContext.state === 'suspended') {
-      this.audioContext.resume();
+      await this.audioContext.resume();
     }
 
     // Create a short buzz sound
