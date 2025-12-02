@@ -27,14 +27,14 @@ class BounceDetector {
   private samples: AccelerationSample[] = [];
   private baselineMagnitude: number = 9.81;  // Earth's gravity magnitude (orientation-independent)
   private calibrationSamples: number[] = [];
+  private calibrationGravitySamples: { x: number; y: number; z: number }[] = [];
   private isCalibrating: boolean = false;
 
-  // Gravity estimation using low-pass filter
-  // This tracks the gravity direction by filtering out dynamic acceleration
+  // Gravity direction (frozen after calibration)
+  // This tracks the gravity direction captured during calibration
   private gravityX: number = 0;
   private gravityY: number = 0;
   private gravityZ: number = 9.81;  // Default to pointing down (phone flat)
-  private gravityAlpha: number = 0.02;  // Low-pass filter coefficient (very slow to resist motion noise)
 
   // Audio properties
   private audioContext: AudioContext | null = null;
@@ -237,11 +237,11 @@ class BounceDetector {
     const gy = accWithGravity.y;
     const gz = accWithGravity.z;
 
-    // Update gravity estimate using low-pass filter on accelerationIncludingGravity
-    // Use a very slow filter so gravity estimate stays stable during motion
-    this.gravityX = this.gravityAlpha * gx + (1 - this.gravityAlpha) * this.gravityX;
-    this.gravityY = this.gravityAlpha * gy + (1 - this.gravityAlpha) * this.gravityY;
-    this.gravityZ = this.gravityAlpha * gz + (1 - this.gravityAlpha) * this.gravityZ;
+    // During calibration, collect gravity direction samples (phone should be held still)
+    // We'll average these to get a stable gravity direction
+    if (this.isCalibrating) {
+      this.calibrationGravitySamples.push({ x: gx, y: gy, z: gz });
+    }
 
     // Calculate gravity magnitude (should be ~9.81)
     const gravityMagnitude = Math.sqrt(
@@ -553,11 +553,7 @@ class BounceDetector {
 
     this.isCalibrating = true;
     this.calibrationSamples = [];
-
-    // Reset gravity estimate to let it converge during calibration
-    this.gravityX = 0;
-    this.gravityY = 0;
-    this.gravityZ = 9.81;
+    this.calibrationGravitySamples = [];
 
     window.addEventListener('devicemotion', this.handleMotion);
 
@@ -570,6 +566,19 @@ class BounceDetector {
   private finishCalibration(): void {
     window.removeEventListener('devicemotion', this.handleMotion);
     this.isCalibrating = false;
+
+    // Calculate and freeze the gravity direction from collected samples
+    if (this.calibrationGravitySamples.length > 0) {
+      const n = this.calibrationGravitySamples.length;
+      const sumX = this.calibrationGravitySamples.reduce((a, s) => a + s.x, 0);
+      const sumY = this.calibrationGravitySamples.reduce((a, s) => a + s.y, 0);
+      const sumZ = this.calibrationGravitySamples.reduce((a, s) => a + s.z, 0);
+
+      // Set the frozen gravity direction (averaged from calibration samples)
+      this.gravityX = sumX / n;
+      this.gravityY = sumY / n;
+      this.gravityZ = sumZ / n;
+    }
 
     if (this.calibrationSamples.length > 0) {
       // Calculate average magnitude as baseline
@@ -603,7 +612,11 @@ class BounceDetector {
       sensitivity: this.config.sensitivity,
       baselineMagnitude: this.baselineMagnitude,
       audioMode: this.config.audioMode,
-      audioVolume: this.config.audioVolume
+      audioVolume: this.config.audioVolume,
+      // Save calibrated gravity direction
+      gravityX: this.gravityX,
+      gravityY: this.gravityY,
+      gravityZ: this.gravityZ
     };
     localStorage.setItem('bounceDetectorSettings', JSON.stringify(settings));
   }
@@ -640,6 +653,12 @@ class BounceDetector {
           if (this.audioVolumeValue) {
             this.audioVolumeValue.textContent = Math.round(settings.audioVolume * 100).toString();
           }
+        }
+        // Load calibrated gravity direction
+        if (settings.gravityX !== undefined && settings.gravityY !== undefined && settings.gravityZ !== undefined) {
+          this.gravityX = settings.gravityX;
+          this.gravityY = settings.gravityY;
+          this.gravityZ = settings.gravityZ;
         }
       }
     } catch (e) {
