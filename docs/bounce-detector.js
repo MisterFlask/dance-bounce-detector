@@ -16,7 +16,7 @@ class BounceDetector {
         this.gravityX = 0;
         this.gravityY = 0;
         this.gravityZ = 9.81; // Default to pointing down (phone flat)
-        this.gravityAlpha = 0.1; // Low-pass filter coefficient (lower = smoother)
+        this.gravityAlpha = 0.02; // Low-pass filter coefficient (very slow to resist motion noise)
         // Audio properties
         this.audioContext = null;
         this.oscillator = null;
@@ -38,38 +38,52 @@ class BounceDetector {
         this.bounceCount = 0;
         this.permissionGranted = false;
         this.handleMotion = (event) => {
-            const acceleration = event.accelerationIncludingGravity;
-            if (!acceleration || acceleration.x === null || acceleration.y === null || acceleration.z === null) {
+            const accWithGravity = event.accelerationIncludingGravity;
+            const linearAcc = event.acceleration; // Linear acceleration without gravity (if available)
+            if (!accWithGravity || accWithGravity.x === null || accWithGravity.y === null || accWithGravity.z === null) {
                 return;
             }
             const now = Date.now();
-            const x = acceleration.x;
-            const y = acceleration.y;
-            const z = acceleration.z;
-            // Update gravity estimate using low-pass filter
-            // This filters out dynamic acceleration and keeps the static gravity component
-            this.gravityX = this.gravityAlpha * x + (1 - this.gravityAlpha) * this.gravityX;
-            this.gravityY = this.gravityAlpha * y + (1 - this.gravityAlpha) * this.gravityY;
-            this.gravityZ = this.gravityAlpha * z + (1 - this.gravityAlpha) * this.gravityZ;
+            const gx = accWithGravity.x;
+            const gy = accWithGravity.y;
+            const gz = accWithGravity.z;
+            // Update gravity estimate using low-pass filter on accelerationIncludingGravity
+            // Use a very slow filter so gravity estimate stays stable during motion
+            this.gravityX = this.gravityAlpha * gx + (1 - this.gravityAlpha) * this.gravityX;
+            this.gravityY = this.gravityAlpha * gy + (1 - this.gravityAlpha) * this.gravityY;
+            this.gravityZ = this.gravityAlpha * gz + (1 - this.gravityAlpha) * this.gravityZ;
             // Calculate gravity magnitude (should be ~9.81)
             const gravityMagnitude = Math.sqrt(this.gravityX * this.gravityX +
                 this.gravityY * this.gravityY +
                 this.gravityZ * this.gravityZ);
-            // Calculate vertical acceleration by projecting current acceleration onto gravity direction
-            // This filters out horizontal acceleration (left/right, forward/back)
-            // The dot product gives us how much of the current acceleration is along the gravity axis
-            let verticalAcceleration;
-            if (gravityMagnitude > 0.1) { // Avoid division by zero
-                // Dot product of acceleration with gravity unit vector
-                const dotProduct = (x * this.gravityX + y * this.gravityY + z * this.gravityZ) / gravityMagnitude;
-                verticalAcceleration = Math.abs(dotProduct); // Magnitude of vertical component
+            let magnitude;
+            // Prefer using linear acceleration (without gravity) if available
+            // This gives us pure motion data that we can project onto gravity axis
+            if (linearAcc && linearAcc.x !== null && linearAcc.y !== null && linearAcc.z !== null) {
+                const lx = linearAcc.x;
+                const ly = linearAcc.y;
+                const lz = linearAcc.z;
+                if (gravityMagnitude > 0.1) {
+                    // Project linear acceleration onto gravity direction (unit vector)
+                    // This gives us the vertical component of motion only
+                    const verticalLinearAcc = (lx * this.gravityX + ly * this.gravityY + lz * this.gravityZ) / gravityMagnitude;
+                    // Add baseline (gravity magnitude) so it's compatible with existing calibration
+                    magnitude = this.baselineMagnitude + verticalLinearAcc;
+                }
+                else {
+                    magnitude = this.baselineMagnitude;
+                }
             }
             else {
-                // Fallback to full magnitude if gravity not yet established
-                verticalAcceleration = Math.sqrt(x * x + y * y + z * z);
+                // Fallback: use accelerationIncludingGravity with projection
+                if (gravityMagnitude > 0.1) {
+                    const dotProduct = (gx * this.gravityX + gy * this.gravityY + gz * this.gravityZ) / gravityMagnitude;
+                    magnitude = Math.abs(dotProduct);
+                }
+                else {
+                    magnitude = Math.sqrt(gx * gx + gy * gy + gz * gz);
+                }
             }
-            // Use vertical acceleration as our magnitude (instead of full 3D magnitude)
-            const magnitude = verticalAcceleration;
             // Update current acceleration display
             if (this.currentAccelEl) {
                 this.currentAccelEl.textContent = magnitude.toFixed(2);
