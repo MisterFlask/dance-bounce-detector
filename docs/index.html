@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#1a1a2e">
+  <title>Dance Bounce Detector</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #eee;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    .container {
+      max-width: 400px;
+      width: 100%;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 1.8rem;
+      margin-bottom: 10px;
+      color: #fff;
+    }
+
+    .subtitle {
+      text-align: center;
+      font-size: 0.9rem;
+      color: #888;
+      margin-bottom: 30px;
+    }
+
+    /* Bounce Indicator */
+    .indicator-container {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 30px;
+    }
+
+    #bounce-indicator {
+      width: 150px;
+      height: 150px;
+      border-radius: 50%;
+      background: linear-gradient(145deg, #2d2d44, #1f1f32);
+      box-shadow:
+        0 0 20px rgba(0, 0, 0, 0.3),
+        inset 0 0 20px rgba(0, 0, 0, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.1s ease;
+    }
+
+    #bounce-indicator.bounce {
+      background: linear-gradient(145deg, #e94560, #c73e54);
+      box-shadow:
+        0 0 40px rgba(233, 69, 96, 0.6),
+        inset 0 0 20px rgba(255, 255, 255, 0.1);
+      transform: scale(1.1);
+    }
+
+    .indicator-text {
+      font-size: 1rem;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    #bounce-indicator.bounce .indicator-text {
+      color: #fff;
+    }
+
+    /* Stats */
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+      margin-bottom: 30px;
+    }
+
+    .stat-card {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      padding: 15px;
+      text-align: center;
+    }
+
+    .stat-label {
+      font-size: 0.75rem;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 5px;
+    }
+
+    .stat-value {
+      font-size: 1.8rem;
+      font-weight: bold;
+      color: #e94560;
+    }
+
+    /* Status */
+    .status {
+      text-align: center;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      font-size: 0.9rem;
+      transition: all 0.3s ease;
+    }
+
+    .status.ready {
+      background: rgba(46, 213, 115, 0.1);
+      color: #2ed573;
+    }
+
+    .status.active {
+      background: rgba(233, 69, 96, 0.1);
+      color: #e94560;
+      animation: pulse 2s infinite;
+    }
+
+    .status.error {
+      background: rgba(255, 71, 87, 0.1);
+      color: #ff4757;
+    }
+
+    .status.warning {
+      background: rgba(255, 165, 2, 0.1);
+      color: #ffa502;
+    }
+
+    .status.calibrating {
+      background: rgba(112, 161, 255, 0.1);
+      color: #70a1ff;
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+
+    /* Controls */
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    button {
+      padding: 16px 24px;
+      font-size: 1rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    #start-btn {
+      background: linear-gradient(135deg, #e94560 0%, #c73e54 100%);
+      color: white;
+    }
+
+    #start-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 20px rgba(233, 69, 96, 0.4);
+    }
+
+    #start-btn:active {
+      transform: translateY(0);
+    }
+
+    #start-btn.active {
+      background: linear-gradient(135deg, #2ed573 0%, #26b85f 100%);
+    }
+
+    #calibrate-btn {
+      background: rgba(255, 255, 255, 0.1);
+      color: #ccc;
+    }
+
+    #calibrate-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    #calibrate-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Sensitivity Slider */
+    .slider-container {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 10px;
+    }
+
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+
+    .slider-label {
+      font-size: 0.85rem;
+      color: #888;
+    }
+
+    .slider-value {
+      font-size: 1rem;
+      font-weight: bold;
+      color: #e94560;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      height: 8px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      outline: none;
+      -webkit-appearance: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #e94560;
+      cursor: pointer;
+      box-shadow: 0 2px 10px rgba(233, 69, 96, 0.4);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #e94560;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 2px 10px rgba(233, 69, 96, 0.4);
+    }
+
+    .slider-hints {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 8px;
+      font-size: 0.7rem;
+      color: #666;
+    }
+
+    /* Instructions */
+    .instructions {
+      margin-top: 30px;
+      padding: 20px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 12px;
+      font-size: 0.85rem;
+      color: #888;
+      line-height: 1.6;
+    }
+
+    .instructions h3 {
+      color: #ccc;
+      margin-bottom: 10px;
+      font-size: 0.9rem;
+    }
+
+    .instructions ul {
+      padding-left: 20px;
+    }
+
+    .instructions li {
+      margin-bottom: 8px;
+    }
+
+    /* Footer */
+    footer {
+      margin-top: auto;
+      padding-top: 30px;
+      text-align: center;
+      font-size: 0.75rem;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Dance Bounce Detector</h1>
+    <p class="subtitle">Stop bouncing, start grooving</p>
+
+    <div class="indicator-container">
+      <div id="bounce-indicator">
+        <span class="indicator-text">Ready</span>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat-card">
+        <div class="stat-label">Bounces</div>
+        <div class="stat-value" id="bounce-count">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Accel (m/s²)</div>
+        <div class="stat-value" id="current-accel">--</div>
+      </div>
+    </div>
+
+    <div id="status" class="status ready">Ready to start</div>
+
+    <div class="controls">
+      <button id="start-btn">Start Detection</button>
+      <button id="calibrate-btn">Calibrate</button>
+
+      <div class="slider-container">
+        <div class="slider-header">
+          <span class="slider-label">Sensitivity</span>
+          <span class="slider-value"><span id="sensitivity-value">3.0</span> m/s²</span>
+        </div>
+        <input type="range" id="sensitivity" min="1" max="8" step="0.5" value="3">
+        <div class="slider-hints">
+          <span>More sensitive</span>
+          <span>Less sensitive</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="instructions">
+      <h3>How to use:</h3>
+      <ul>
+        <li>Hold your phone in your hand or pocket while dancing</li>
+        <li>Tap "Start Detection" to begin monitoring</li>
+        <li>The app will vibrate when it detects vertical bouncing</li>
+        <li>Adjust sensitivity if detecting too many or too few bounces</li>
+        <li>Use "Calibrate" while standing still for best results</li>
+      </ul>
+    </div>
+  </div>
+
+  <footer>
+    Dance Bounce Detector | Use on mobile for best experience
+  </footer>
+
+  <script type="module" src="bounce-detector.js"></script>
+</body>
+</html>

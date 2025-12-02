@@ -1,0 +1,19 @@
+{
+  "name": "dance-bounce-detector",
+  "version": "1.0.0",
+  "description": "A web app that detects vertical bouncing using the smartphone accelerometer and provides haptic feedback for dancers",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0"
+  },
+  "keywords": [
+    "dance",
+    "accelerometer",
+    "bounce-detection",
+    "haptic-feedback"
+  ],
+  "license": "MIT"
+}
