@@ -8,7 +8,7 @@ class BounceDetector {
         this.isRunning = false;
         this.lastBounceTime = 0;
         this.samples = [];
-        this.baselineZ = 9.81; // Earth's gravity
+        this.baselineMagnitude = 9.81; // Earth's gravity magnitude (orientation-independent)
         this.calibrationSamples = [];
         this.isCalibrating = false;
         // Audio properties
@@ -33,25 +33,30 @@ class BounceDetector {
         this.permissionGranted = false;
         this.handleMotion = (event) => {
             const acceleration = event.accelerationIncludingGravity;
-            if (!acceleration || acceleration.z === null) {
+            if (!acceleration || acceleration.x === null || acceleration.y === null || acceleration.z === null) {
                 return;
             }
             const now = Date.now();
+            const x = acceleration.x;
+            const y = acceleration.y;
             const z = acceleration.z;
+            // Calculate magnitude of acceleration vector (orientation-independent)
+            // At rest, this is always ~9.81 regardless of phone orientation
+            const magnitude = Math.sqrt(x * x + y * y + z * z);
             // Update current acceleration display
             if (this.currentAccelEl) {
-                this.currentAccelEl.textContent = z.toFixed(2);
+                this.currentAccelEl.textContent = magnitude.toFixed(2);
             }
             // Handle calibration mode
             if (this.isCalibrating) {
-                this.calibrationSamples.push(z);
+                this.calibrationSamples.push(magnitude);
                 if (this.calibrationSamples.length >= 50) {
                     this.finishCalibration();
                 }
                 return;
             }
             // Calculate deviation for frequency feedback
-            const deviation = Math.abs(z - this.baselineZ);
+            const deviation = Math.abs(magnitude - this.baselineMagnitude);
             // Update frequency audio feedback (continuous)
             if (this.config.audioMode === 'frequency') {
                 this.updateFrequencyFromDeviation(deviation);
@@ -60,13 +65,13 @@ class BounceDetector {
                 this.updateFrequencyFadeoutFromDeviation(deviation);
             }
             // Add sample to buffer
-            this.samples.push({ timestamp: now, z });
+            this.samples.push({ timestamp: now, magnitude });
             // Keep only recent samples
             while (this.samples.length > this.config.sampleWindow) {
                 this.samples.shift();
             }
             // Detect bounce
-            if (this.detectBounce(z, now)) {
+            if (this.detectBounce(magnitude, now)) {
                 this.onBounceDetected();
             }
         };
@@ -214,16 +219,17 @@ class BounceDetector {
         this.updateStatus('Stopped', 'ready');
         this.clearBounceIndicator();
     }
-    detectBounce(currentZ, now) {
+    detectBounce(currentMagnitude, now) {
         // Check debounce time
         if (now - this.lastBounceTime < this.config.debounceTime) {
             return false;
         }
-        // Calculate deviation from baseline (gravity)
-        const deviation = Math.abs(currentZ - this.baselineZ);
+        // Calculate deviation from baseline gravity magnitude
+        const deviation = Math.abs(currentMagnitude - this.baselineMagnitude);
         // A bounce creates acceleration significantly different from gravity
-        // When moving up: z < gravity (feeling lighter)
-        // When moving down: z > gravity (feeling heavier)
+        // When moving up: magnitude < gravity (feeling lighter)
+        // When moving down: magnitude > gravity (feeling heavier)
+        // Using magnitude makes this orientation-independent
         if (deviation > this.config.sensitivity) {
             this.lastBounceTime = now;
             return true;
@@ -417,10 +423,10 @@ class BounceDetector {
         window.removeEventListener('devicemotion', this.handleMotion);
         this.isCalibrating = false;
         if (this.calibrationSamples.length > 0) {
-            // Calculate average Z as baseline
+            // Calculate average magnitude as baseline
             const sum = this.calibrationSamples.reduce((a, b) => a + b, 0);
-            this.baselineZ = sum / this.calibrationSamples.length;
-            this.updateStatus(`Calibrated! Baseline: ${this.baselineZ.toFixed(2)} m/s²`, 'ready');
+            this.baselineMagnitude = sum / this.calibrationSamples.length;
+            this.updateStatus(`Calibrated! Baseline: ${this.baselineMagnitude.toFixed(2)} m/s²`, 'ready');
             this.saveSettings();
         }
         if (this.calibrateBtn) {
@@ -441,7 +447,7 @@ class BounceDetector {
     saveSettings() {
         const settings = {
             sensitivity: this.config.sensitivity,
-            baselineZ: this.baselineZ,
+            baselineMagnitude: this.baselineMagnitude,
             audioMode: this.config.audioMode,
             audioVolume: this.config.audioVolume
         };
@@ -461,8 +467,9 @@ class BounceDetector {
                         this.sensitivityValue.textContent = settings.sensitivity.toFixed(1);
                     }
                 }
-                if (settings.baselineZ !== undefined) {
-                    this.baselineZ = settings.baselineZ;
+                // Load baselineMagnitude (ignore old baselineZ since it was orientation-dependent)
+                if (settings.baselineMagnitude !== undefined) {
+                    this.baselineMagnitude = settings.baselineMagnitude;
                 }
                 if (settings.audioMode !== undefined) {
                     this.config.audioMode = settings.audioMode;
