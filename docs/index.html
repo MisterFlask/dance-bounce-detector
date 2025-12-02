@@ -271,6 +271,49 @@
       color: #666;
     }
 
+    /* Audio Select */
+    .audio-select {
+      width: 100%;
+      padding: 12px 16px;
+      font-size: 1rem;
+      border: none;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      color: #eee;
+      cursor: pointer;
+      outline: none;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23888' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+    }
+
+    .audio-select:hover {
+      background-color: rgba(255, 255, 255, 0.15);
+    }
+
+    .audio-select:focus {
+      box-shadow: 0 0 0 2px rgba(233, 69, 96, 0.4);
+    }
+
+    .audio-select option {
+      background: #1a1a2e;
+      color: #eee;
+      padding: 10px;
+    }
+
+    .audio-hints {
+      margin-top: 8px;
+      text-align: center;
+    }
+
+    .hint-text {
+      font-size: 0.7rem;
+      color: #666;
+      line-height: 1.4;
+    }
+
     /* Instructions */
     .instructions {
       margin-top: 30px;
@@ -345,6 +388,32 @@
           <span>Less sensitive</span>
         </div>
       </div>
+
+      <div class="slider-container">
+        <div class="slider-header">
+          <span class="slider-label">Audio Feedback</span>
+        </div>
+        <select id="audio-mode" class="audio-select">
+          <option value="off">Off</option>
+          <option value="discrete">Discrete Buzz</option>
+          <option value="frequency">Frequency (Continuous)</option>
+        </select>
+        <div class="audio-hints">
+          <span class="hint-text">Discrete: beeps on bounce | Frequency: pitch changes with movement</span>
+        </div>
+      </div>
+
+      <div class="slider-container" id="volume-container">
+        <div class="slider-header">
+          <span class="slider-label">Audio Volume</span>
+          <span class="slider-value"><span id="audio-volume-value">50</span>%</span>
+        </div>
+        <input type="range" id="audio-volume" min="0" max="1" step="0.1" value="0.5">
+        <div class="slider-hints">
+          <span>Quiet</span>
+          <span>Loud</span>
+        </div>
+      </div>
     </div>
 
     <div class="instructions">
@@ -355,6 +424,7 @@
         <li>The app will vibrate when it detects vertical bouncing</li>
         <li>Adjust sensitivity if detecting too many or too few bounces</li>
         <li>Use "Calibrate" while standing still for best results</li>
+        <li><strong>Audio modes:</strong> "Discrete" beeps on each bounce; "Frequency" plays a continuous tone that rises with more movement</li>
       </ul>
     </div>
   </div>
