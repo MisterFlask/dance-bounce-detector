@@ -297,9 +297,9 @@ class BounceDetector {
         this.stopFrequencyAudio();
         // Create oscillator gain node for independent volume control (used in fadeout mode)
         this.oscillatorGainNode = this.audioContext.createGain();
-        // For frequency-fadeout mode, start quiet and let deviation control volume
+        // For frequency-fadeout mode, start silent and let deviation control volume
         // For regular frequency mode, start at full volume
-        this.oscillatorGainNode.gain.value = this.config.audioMode === 'frequency-fadeout' ? 0.1 : 1.0;
+        this.oscillatorGainNode.gain.value = this.config.audioMode === 'frequency-fadeout' ? 0 : 1.0;
         this.oscillatorGainNode.connect(this.gainNode);
         // Create oscillator for continuous frequency feedback
         this.oscillator = this.audioContext.createOscillator();
@@ -360,10 +360,10 @@ class BounceDetector {
         this.oscillator.frequency.setTargetAtTime(frequency, this.audioContext.currentTime, 0.05 // Time constant for smooth transition
         );
         // Map deviation to volume:
-        // - 0 deviation = 0.1 (quiet base level, barely audible)
+        // - 0 deviation = 0 (silent)
         // - max deviation = 1.0 (full volume)
         // Volume quickly rises with deviation, then fades out when deviation decreases
-        const minVolume = 0.1;
+        const minVolume = 0;
         const maxVolume = 1.0;
         const volume = minVolume + (maxVolume - minVolume) * normalizedDeviation;
         // Smooth volume transition with fadeout effect
