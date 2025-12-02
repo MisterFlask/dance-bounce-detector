@@ -27,14 +27,16 @@ class BounceDetector {
   private samples: AccelerationSample[] = [];
   private baselineMagnitude: number = 9.81;  // Earth's gravity magnitude (orientation-independent)
   private calibrationSamples: number[] = [];
-  private calibrationGravitySamples: { x: number; y: number; z: number }[] = [];
   private isCalibrating: boolean = false;
 
-  // Gravity direction (frozen after calibration)
-  // This tracks the gravity direction captured during calibration
+  // Gravity direction - continuously tracked with very slow filter
+  // Slow enough to ignore quick movements, fast enough to track orientation changes
   private gravityX: number = 0;
   private gravityY: number = 0;
   private gravityZ: number = 9.81;  // Default to pointing down (phone flat)
+  // At 60Hz, alpha=0.005 gives ~3 second time constant - slow enough to filter
+  // quick movements but tracks orientation changes (e.g., phone going into pocket)
+  private gravityAlpha: number = 0.005;
 
   // Audio properties
   private audioContext: AudioContext | null = null;
@@ -237,11 +239,14 @@ class BounceDetector {
     const gy = accWithGravity.y;
     const gz = accWithGravity.z;
 
-    // During calibration, collect gravity direction samples (phone should be held still)
-    // We'll average these to get a stable gravity direction
-    if (this.isCalibrating) {
-      this.calibrationGravitySamples.push({ x: gx, y: gy, z: gz });
-    }
+    // Update gravity estimate with low-pass filter
+    // During calibration: use faster alpha (0.1) since phone is held still
+    // During detection: use very slow alpha (0.005) to track orientation changes
+    // while filtering out quick horizontal movements
+    const alpha = this.isCalibrating ? 0.1 : this.gravityAlpha;
+    this.gravityX = alpha * gx + (1 - alpha) * this.gravityX;
+    this.gravityY = alpha * gy + (1 - alpha) * this.gravityY;
+    this.gravityZ = alpha * gz + (1 - alpha) * this.gravityZ;
 
     // Calculate gravity magnitude (should be ~9.81)
     const gravityMagnitude = Math.sqrt(
@@ -553,7 +558,11 @@ class BounceDetector {
 
     this.isCalibrating = true;
     this.calibrationSamples = [];
-    this.calibrationGravitySamples = [];
+
+    // Reset gravity to allow fast convergence during calibration
+    this.gravityX = 0;
+    this.gravityY = 0;
+    this.gravityZ = 9.81;
 
     window.addEventListener('devicemotion', this.handleMotion);
 
@@ -567,18 +576,8 @@ class BounceDetector {
     window.removeEventListener('devicemotion', this.handleMotion);
     this.isCalibrating = false;
 
-    // Calculate and freeze the gravity direction from collected samples
-    if (this.calibrationGravitySamples.length > 0) {
-      const n = this.calibrationGravitySamples.length;
-      const sumX = this.calibrationGravitySamples.reduce((a, s) => a + s.x, 0);
-      const sumY = this.calibrationGravitySamples.reduce((a, s) => a + s.y, 0);
-      const sumZ = this.calibrationGravitySamples.reduce((a, s) => a + s.z, 0);
-
-      // Set the frozen gravity direction (averaged from calibration samples)
-      this.gravityX = sumX / n;
-      this.gravityY = sumY / n;
-      this.gravityZ = sumZ / n;
-    }
+    // Gravity direction has already converged during calibration via fast filter
+    // It will continue to be tracked slowly during detection
 
     if (this.calibrationSamples.length > 0) {
       // Calculate average magnitude as baseline
