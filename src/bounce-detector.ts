@@ -29,6 +29,13 @@ class BounceDetector {
   private calibrationSamples: number[] = [];
   private isCalibrating: boolean = false;
 
+  // Gravity estimation using low-pass filter
+  // This tracks the gravity direction by filtering out dynamic acceleration
+  private gravityX: number = 0;
+  private gravityY: number = 0;
+  private gravityZ: number = 9.81;  // Default to pointing down (phone flat)
+  private gravityAlpha: number = 0.1;  // Low-pass filter coefficient (lower = smoother)
+
   // Audio properties
   private audioContext: AudioContext | null = null;
   private oscillator: OscillatorNode | null = null;
@@ -229,9 +236,34 @@ class BounceDetector {
     const y = acceleration.y;
     const z = acceleration.z;
 
-    // Calculate magnitude of acceleration vector (orientation-independent)
-    // At rest, this is always ~9.81 regardless of phone orientation
-    const magnitude = Math.sqrt(x * x + y * y + z * z);
+    // Update gravity estimate using low-pass filter
+    // This filters out dynamic acceleration and keeps the static gravity component
+    this.gravityX = this.gravityAlpha * x + (1 - this.gravityAlpha) * this.gravityX;
+    this.gravityY = this.gravityAlpha * y + (1 - this.gravityAlpha) * this.gravityY;
+    this.gravityZ = this.gravityAlpha * z + (1 - this.gravityAlpha) * this.gravityZ;
+
+    // Calculate gravity magnitude (should be ~9.81)
+    const gravityMagnitude = Math.sqrt(
+      this.gravityX * this.gravityX +
+      this.gravityY * this.gravityY +
+      this.gravityZ * this.gravityZ
+    );
+
+    // Calculate vertical acceleration by projecting current acceleration onto gravity direction
+    // This filters out horizontal acceleration (left/right, forward/back)
+    // The dot product gives us how much of the current acceleration is along the gravity axis
+    let verticalAcceleration: number;
+    if (gravityMagnitude > 0.1) {  // Avoid division by zero
+      // Dot product of acceleration with gravity unit vector
+      const dotProduct = (x * this.gravityX + y * this.gravityY + z * this.gravityZ) / gravityMagnitude;
+      verticalAcceleration = Math.abs(dotProduct);  // Magnitude of vertical component
+    } else {
+      // Fallback to full magnitude if gravity not yet established
+      verticalAcceleration = Math.sqrt(x * x + y * y + z * z);
+    }
+
+    // Use vertical acceleration as our magnitude (instead of full 3D magnitude)
+    const magnitude = verticalAcceleration;
 
     // Update current acceleration display
     if (this.currentAccelEl) {
@@ -508,6 +540,11 @@ class BounceDetector {
 
     this.isCalibrating = true;
     this.calibrationSamples = [];
+
+    // Reset gravity estimate to let it converge during calibration
+    this.gravityX = 0;
+    this.gravityY = 0;
+    this.gravityZ = 9.81;
 
     window.addEventListener('devicemotion', this.handleMotion);
 
