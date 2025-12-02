@@ -4,7 +4,7 @@
  * and provides haptic feedback to help dancers avoid habitual bouncing.
  */
 
-type AudioFeedbackMode = 'off' | 'discrete' | 'frequency';
+type AudioFeedbackMode = 'off' | 'discrete' | 'frequency' | 'frequency-fadeout';
 
 interface BounceDetectorConfig {
   sensitivity: number;        // Threshold for bounce detection (m/s^2)
@@ -33,6 +33,7 @@ class BounceDetector {
   private audioContext: AudioContext | null = null;
   private oscillator: OscillatorNode | null = null;
   private gainNode: GainNode | null = null;
+  private oscillatorGainNode: GainNode | null = null;  // Separate gain for oscillator volume fadeout
   private isAudioInitialized: boolean = false;
 
   // UI Elements
@@ -186,9 +187,9 @@ class BounceDetector {
 
     window.addEventListener('devicemotion', this.handleMotion);
 
-    // Start frequency audio if in frequency mode
-    if (this.config.audioMode === 'frequency') {
-      await this.startFrequencyAudio();
+    // Start frequency audio if in a frequency mode
+    if (this.config.audioMode === 'frequency' || this.config.audioMode === 'frequency-fadeout') {
+      this.startFrequencyAudio();
     }
 
     if (this.startBtn) {
@@ -246,6 +247,8 @@ class BounceDetector {
     // Update frequency audio feedback (continuous)
     if (this.config.audioMode === 'frequency') {
       this.updateFrequencyFromDeviation(deviation);
+    } else if (this.config.audioMode === 'frequency-fadeout') {
+      this.updateFrequencyFadeoutFromDeviation(deviation);
     }
 
     // Add sample to buffer
@@ -324,14 +327,14 @@ class BounceDetector {
       }
     }
 
-    // Stop frequency audio if switching away from frequency mode
-    if (this.config.audioMode !== 'frequency') {
+    // Stop frequency audio if switching away from frequency modes
+    if (this.config.audioMode !== 'frequency' && this.config.audioMode !== 'frequency-fadeout') {
       this.stopFrequencyAudio();
     }
 
-    // Start frequency audio if switching to frequency mode and detection is running
-    if (this.config.audioMode === 'frequency' && this.isRunning) {
-      await this.startFrequencyAudio();
+    // Start frequency audio if switching to a frequency mode and detection is running
+    if ((this.config.audioMode === 'frequency' || this.config.audioMode === 'frequency-fadeout') && this.isRunning) {
+      this.startFrequencyAudio();
     }
   }
 
@@ -350,11 +353,18 @@ class BounceDetector {
     // Stop existing oscillator if any
     this.stopFrequencyAudio();
 
+    // Create oscillator gain node for independent volume control (used in fadeout mode)
+    this.oscillatorGainNode = this.audioContext.createGain();
+    // For frequency-fadeout mode, start quiet and let deviation control volume
+    // For regular frequency mode, start at full volume
+    this.oscillatorGainNode.gain.value = this.config.audioMode === 'frequency-fadeout' ? 0.1 : 1.0;
+    this.oscillatorGainNode.connect(this.gainNode);
+
     // Create oscillator for continuous frequency feedback
     this.oscillator = this.audioContext.createOscillator();
     this.oscillator.type = 'sine';
     this.oscillator.frequency.value = 200; // Base frequency in Hz
-    this.oscillator.connect(this.gainNode);
+    this.oscillator.connect(this.oscillatorGainNode);
     this.oscillator.start();
   }
 
@@ -367,6 +377,14 @@ class BounceDetector {
         // Oscillator might already be stopped
       }
       this.oscillator = null;
+    }
+    if (this.oscillatorGainNode) {
+      try {
+        this.oscillatorGainNode.disconnect();
+      } catch (e) {
+        // Gain node might already be disconnected
+      }
+      this.oscillatorGainNode = null;
     }
   }
 
@@ -392,7 +410,48 @@ class BounceDetector {
     );
   }
 
-  private async playDiscreteBuzz(): Promise<void> {
+  private updateFrequencyFadeoutFromDeviation(deviation: number): void {
+    if (!this.oscillator || !this.oscillatorGainNode || this.config.audioMode !== 'frequency-fadeout') return;
+
+    // Map deviation to frequency (same as regular frequency mode):
+    // - 0 deviation = 200 Hz (low, calm)
+    // - max deviation (e.g., 10 m/s²) = 1000 Hz (high, alert)
+    const minFreq = 200;
+    const maxFreq = 1000;
+    const maxDeviation = 10; // Maximum expected deviation in m/s²
+
+    const normalizedDeviation = Math.min(deviation / maxDeviation, 1);
+    const frequency = minFreq + (maxFreq - minFreq) * normalizedDeviation;
+
+    // Smooth frequency transition
+    this.oscillator.frequency.setTargetAtTime(
+      frequency,
+      this.audioContext!.currentTime,
+      0.05 // Time constant for smooth transition
+    );
+
+    // Map deviation to volume:
+    // - 0 deviation = 0.1 (quiet base level, barely audible)
+    // - max deviation = 1.0 (full volume)
+    // Volume quickly rises with deviation, then fades out when deviation decreases
+    const minVolume = 0.1;
+    const maxVolume = 1.0;
+    const volume = minVolume + (maxVolume - minVolume) * normalizedDeviation;
+
+    // Smooth volume transition with fadeout effect
+    // Use a shorter time constant for rising (0.02s) and longer for falling (0.15s)
+    // to create a "punch in, fade out" effect
+    const currentVolume = this.oscillatorGainNode.gain.value;
+    const timeConstant = volume > currentVolume ? 0.02 : 0.15;
+
+    this.oscillatorGainNode.gain.setTargetAtTime(
+      volume,
+      this.audioContext!.currentTime,
+      timeConstant
+    );
+  }
+
+  private playDiscreteBuzz(): void {
     if (!this.audioContext || !this.gainNode) {
       this.initAudio();
     }
