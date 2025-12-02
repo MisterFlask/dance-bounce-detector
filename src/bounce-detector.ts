@@ -451,7 +451,7 @@ class BounceDetector {
     );
   }
 
-  private playDiscreteBuzz(): void {
+  private async playDiscreteBuzz(): Promise<void> {
     if (!this.audioContext || !this.gainNode) {
       this.initAudio();
     }

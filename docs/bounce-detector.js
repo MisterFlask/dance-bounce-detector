@@ -367,7 +367,7 @@ class BounceDetector {
         const timeConstant = volume > currentVolume ? 0.02 : 0.15;
         this.oscillatorGainNode.gain.setTargetAtTime(volume, this.audioContext.currentTime, timeConstant);
     }
-    playDiscreteBuzz() {
+    async playDiscreteBuzz() {
         if (!this.audioContext || !this.gainNode) {
             this.initAudio();
         }
