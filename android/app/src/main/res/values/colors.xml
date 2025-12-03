@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Primary colors - Dark theme matching original web app -->
+    <color name="primary">#6C63FF</color>
+    <color name="primary_variant">#5048c7</color>
+    <color name="on_primary">#FFFFFF</color>
+
+    <!-- Background colors -->
+    <color name="background_dark">#1a1a2e</color>
+    <color name="background_light">#16213e</color>
+    <color name="surface">#1f2940</color>
+
+    <!-- Accent colors -->
+    <color name="bounce_red">#ff4757</color>
+    <color name="success_green">#2ecc71</color>
+    <color name="warning_yellow">#f39c12</color>
+
+    <!-- Text colors -->
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#b0b0b0</color>
+</resources>
