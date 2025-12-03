@@ -37,8 +37,11 @@ class BounceDetector {
         this.audioModeSelect = null;
         this.audioVolumeSlider = null;
         this.audioVolumeValue = null;
+        this.gravityModeSelect = null;
+        this.gravityModeHint = null;
         this.bounceCount = 0;
         this.permissionGranted = false;
+        this.gravitySensorSupported = false; // Whether device provides linear acceleration
         this.handleMotion = (event) => {
             const accWithGravity = event.accelerationIncludingGravity;
             const linearAcc = event.acceleration; // Linear acceleration without gravity (if available)
@@ -49,16 +52,24 @@ class BounceDetector {
             const gx = accWithGravity.x;
             const gy = accWithGravity.y;
             const gz = accWithGravity.z;
-            // If linear acceleration is available, compute gravity directly (no filtering needed!)
-            // gravity = accelerationIncludingGravity - linearAcceleration
-            // This uses the device's built-in sensor fusion which is much more accurate
-            if (linearAcc && linearAcc.x !== null && linearAcc.y !== null && linearAcc.z !== null) {
+            // Check if device supports linear acceleration sensor
+            const hasLinearAcc = linearAcc && linearAcc.x !== null && linearAcc.y !== null && linearAcc.z !== null;
+            // Update gravity sensor support flag and UI on first detection
+            if (!this.gravitySensorSupported && hasLinearAcc) {
+                this.gravitySensorSupported = true;
+                this.updateGravityModeUI();
+            }
+            // Determine which gravity estimation method to use based on config
+            const useSensor = this.config.gravityMode === 'sensor' && hasLinearAcc;
+            if (useSensor) {
+                // Compute gravity directly from device sensor: gravity = accWithGravity - linearAcc
+                // This uses the device's built-in sensor fusion which is much more accurate
                 this.gravityX = gx - linearAcc.x;
                 this.gravityY = gy - linearAcc.y;
                 this.gravityZ = gz - linearAcc.z;
             }
             else {
-                // Fallback: estimate gravity with low-pass filter
+                // Use low-pass filter to estimate gravity
                 // During calibration: use faster alpha (0.1) since phone is held still
                 // During detection: use very slow alpha (0.005) to track orientation changes
                 const alpha = this.isCalibrating ? 0.1 : this.gravityAlpha;
@@ -71,9 +82,8 @@ class BounceDetector {
                 this.gravityY * this.gravityY +
                 this.gravityZ * this.gravityZ);
             let magnitude;
-            // Prefer using linear acceleration (without gravity) if available
-            // This gives us pure motion data that we can project onto gravity axis
-            if (linearAcc && linearAcc.x !== null && linearAcc.y !== null && linearAcc.z !== null) {
+            // Use linear acceleration for magnitude if using sensor mode and it's available
+            if (useSensor) {
                 const lx = linearAcc.x;
                 const ly = linearAcc.y;
                 const lz = linearAcc.z;
@@ -89,7 +99,7 @@ class BounceDetector {
                 }
             }
             else {
-                // Fallback: use accelerationIncludingGravity with projection
+                // Use accelerationIncludingGravity with projection (filter mode or no sensor)
                 if (gravityMagnitude > 0.1) {
                     const dotProduct = (gx * this.gravityX + gy * this.gravityY + gz * this.gravityZ) / gravityMagnitude;
                     magnitude = Math.abs(dotProduct);
@@ -137,6 +147,7 @@ class BounceDetector {
             sampleWindow: 10, // Analyze last 10 samples
             audioMode: 'off', // Audio feedback off by default
             audioVolume: 0.5, // 50% volume by default
+            gravityMode: 'sensor', // Use device sensor by default (falls back to filter if unavailable)
             ...config
         };
     }
@@ -158,6 +169,8 @@ class BounceDetector {
         this.audioModeSelect = document.getElementById('audio-mode');
         this.audioVolumeSlider = document.getElementById('audio-volume');
         this.audioVolumeValue = document.getElementById('audio-volume-value');
+        this.gravityModeSelect = document.getElementById('gravity-mode');
+        this.gravityModeHint = document.getElementById('gravity-mode-hint');
     }
     setupEventListeners() {
         this.startBtn?.addEventListener('click', () => this.toggleDetection());
@@ -187,6 +200,49 @@ class BounceDetector {
             }
             this.saveSettings();
         });
+        this.gravityModeSelect?.addEventListener('change', (e) => {
+            const mode = e.target.value;
+            this.config.gravityMode = mode;
+            this.updateGravityModeHint();
+            this.saveSettings();
+        });
+    }
+    updateGravityModeHint() {
+        if (!this.gravityModeHint)
+            return;
+        if (this.config.gravityMode === 'sensor') {
+            if (this.gravitySensorSupported) {
+                this.gravityModeHint.textContent = "Uses device's built-in sensor fusion for accurate gravity tracking";
+            }
+            else {
+                this.gravityModeHint.textContent = "Device sensor not available - using low-pass filter instead";
+            }
+        }
+        else {
+            this.gravityModeHint.textContent = "Uses software low-pass filter to estimate gravity direction";
+        }
+    }
+    updateGravityModeUI() {
+        if (!this.gravityModeSelect)
+            return;
+        // Enable/disable the sensor option based on device support
+        const sensorOption = this.gravityModeSelect.querySelector('option[value="sensor"]');
+        if (sensorOption) {
+            if (this.gravitySensorSupported) {
+                sensorOption.disabled = false;
+                sensorOption.textContent = "Device Sensor (recommended)";
+            }
+            else {
+                sensorOption.disabled = true;
+                sensorOption.textContent = "Device Sensor (not available)";
+                // Force filter mode if sensor was selected but not available
+                if (this.config.gravityMode === 'sensor') {
+                    this.config.gravityMode = 'filter';
+                    this.gravityModeSelect.value = 'filter';
+                }
+            }
+        }
+        this.updateGravityModeHint();
     }
     checkDeviceSupport() {
         const hasAccelerometer = 'DeviceMotionEvent' in window;
@@ -511,6 +567,7 @@ class BounceDetector {
             baselineMagnitude: this.baselineMagnitude,
             audioMode: this.config.audioMode,
             audioVolume: this.config.audioVolume,
+            gravityMode: this.config.gravityMode,
             // Save calibrated gravity direction
             gravityX: this.gravityX,
             gravityY: this.gravityY,
@@ -549,6 +606,12 @@ class BounceDetector {
                     }
                     if (this.audioVolumeValue) {
                         this.audioVolumeValue.textContent = Math.round(settings.audioVolume * 100).toString();
+                    }
+                }
+                if (settings.gravityMode !== undefined) {
+                    this.config.gravityMode = settings.gravityMode;
+                    if (this.gravityModeSelect) {
+                        this.gravityModeSelect.value = settings.gravityMode;
                     }
                 }
                 // Load calibrated gravity direction
