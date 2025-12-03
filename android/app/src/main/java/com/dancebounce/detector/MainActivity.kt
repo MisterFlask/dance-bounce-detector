@@ -65,6 +65,7 @@ class MainActivity : ComponentActivity(), BounceDetectorListener {
     private val _sensitivity = mutableStateOf(3.0f)
     private val _audioMode = mutableStateOf(AudioFeedbackMode.OFF)
     private val _audioVolume = mutableStateOf(0.5f)
+    private val _audioSensitivity = mutableStateOf(5.0f)
     private val _gravityMode = mutableStateOf(GravityMode.SENSOR)
     private val _showBounce = mutableStateOf(false)
     private val _gravitySensorSupported = mutableStateOf(true)
@@ -86,6 +87,7 @@ class MainActivity : ComponentActivity(), BounceDetectorListener {
                     detector.config.sensitivity = _sensitivity.value
                     detector.config.audioMode = _audioMode.value
                     detector.config.audioVolume = _audioVolume.value
+                    detector.config.audioSensitivity = _audioSensitivity.value
                     detector.config.gravityMode = _gravityMode.value
                     _gravitySensorSupported.value = detector.gravitySensorSupported
                 }
@@ -173,6 +175,7 @@ class MainActivity : ComponentActivity(), BounceDetectorListener {
         val sensitivity by _sensitivity
         val audioMode by _audioMode
         val audioVolume by _audioVolume
+        val audioSensitivity by _audioSensitivity
         val gravityMode by _gravityMode
         val showBounce by _showBounce
         val gravitySensorSupported by _gravitySensorSupported
@@ -350,9 +353,9 @@ class MainActivity : ComponentActivity(), BounceDetectorListener {
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        // Sensitivity Slider
+                        // Bounce Detection Sensitivity Slider
                         Text(
-                            text = "Sensitivity: ${String.format("%.1f", sensitivity)} m/s²",
+                            text = "Bounce Detection: ${String.format("%.1f", sensitivity)} m/s²",
                             color = TextPrimary,
                             fontWeight = FontWeight.Medium
                         )
@@ -368,6 +371,11 @@ class MainActivity : ComponentActivity(), BounceDetectorListener {
                                 thumbColor = PrimaryColor,
                                 activeTrackColor = PrimaryColor
                             )
+                        )
+                        Text(
+                            text = "Lower = more sensitive (vibrates more)",
+                            fontSize = 12.sp,
+                            color = TextSecondary
                         )
 
                         Spacer(modifier = Modifier.height(16.dp))
@@ -408,6 +416,34 @@ class MainActivity : ComponentActivity(), BounceDetectorListener {
                                     thumbColor = PrimaryColor,
                                     activeTrackColor = PrimaryColor
                                 )
+                            )
+                        }
+
+                        // Audio Sensitivity (only show for frequency-based audio modes)
+                        if (audioMode == AudioFeedbackMode.FREQUENCY || audioMode == AudioFeedbackMode.FREQUENCY_FADEOUT) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "Audio Sensitivity: ${String.format("%.1f", audioSensitivity)} m/s²",
+                                color = TextPrimary,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Slider(
+                                value = audioSensitivity,
+                                onValueChange = { value ->
+                                    _audioSensitivity.value = value
+                                    bounceDetectorService?.getDetector()?.config?.audioSensitivity = value
+                                    saveSettings()
+                                },
+                                valueRange = 1f..10f,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = PrimaryColor,
+                                    activeTrackColor = PrimaryColor
+                                )
+                            )
+                            Text(
+                                text = "Lower = pitch/volume reacts more to small movements",
+                                fontSize = 12.sp,
+                                color = TextSecondary
                             )
                         }
 
@@ -611,6 +647,7 @@ class MainActivity : ComponentActivity(), BounceDetectorListener {
             putFloat("sensitivity", _sensitivity.value)
             putString("audioMode", _audioMode.value.name)
             putFloat("audioVolume", _audioVolume.value)
+            putFloat("audioSensitivity", _audioSensitivity.value)
             putString("gravityMode", _gravityMode.value.name)
             apply()
         }
@@ -624,6 +661,7 @@ class MainActivity : ComponentActivity(), BounceDetectorListener {
             AudioFeedbackMode.OFF
         }
         _audioVolume.value = prefs.getFloat("audioVolume", 0.5f)
+        _audioSensitivity.value = prefs.getFloat("audioSensitivity", 5.0f)
         _gravityMode.value = try {
             GravityMode.valueOf(prefs.getString("gravityMode", "SENSOR") ?: "SENSOR")
         } catch (e: Exception) {

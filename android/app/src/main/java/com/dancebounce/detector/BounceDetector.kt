@@ -32,6 +32,7 @@ data class BounceDetectorConfig(
     var vibrationDuration: Long = 100L,   // How long to vibrate (ms)
     var audioMode: AudioFeedbackMode = AudioFeedbackMode.OFF,
     var audioVolume: Float = 0.5f,        // Audio volume (0.0 to 1.0)
+    var audioSensitivity: Float = 5.0f,   // Max deviation for full pitch/volume response (m/s^2)
     var gravityMode: GravityMode = GravityMode.SENSOR
 )
 
@@ -447,7 +448,7 @@ class BounceDetector(private val context: Context) : SensorEventListener {
         // Map deviation to frequency: 200Hz to 1000Hz
         val minFreq = 200f
         val maxFreq = 1000f
-        val maxDeviation = 10f
+        val maxDeviation = config.audioSensitivity
 
         val normalizedDeviation = min(deviation / maxDeviation, 1f)
         targetFrequency = minFreq + (maxFreq - minFreq) * normalizedDeviation
@@ -458,7 +459,7 @@ class BounceDetector(private val context: Context) : SensorEventListener {
         // Map deviation to frequency: 200Hz to 1000Hz
         val minFreq = 200f
         val maxFreq = 1000f
-        val maxDeviation = 10f
+        val maxDeviation = config.audioSensitivity
 
         val normalizedDeviation = min(deviation / maxDeviation, 1f)
         targetFrequency = minFreq + (maxFreq - minFreq) * normalizedDeviation
@@ -483,6 +484,7 @@ class BounceDetector(private val context: Context) : SensorEventListener {
             "baselineMagnitude" to baselineMagnitude,
             "audioMode" to config.audioMode.name,
             "audioVolume" to config.audioVolume,
+            "audioSensitivity" to config.audioSensitivity,
             "gravityMode" to config.gravityMode.name,
             "gravityX" to gravityX,
             "gravityY" to gravityY,
@@ -501,6 +503,7 @@ class BounceDetector(private val context: Context) : SensorEventListener {
             }
         }
         settings["audioVolume"]?.let { config.audioVolume = (it as Number).toFloat() }
+        settings["audioSensitivity"]?.let { config.audioSensitivity = (it as Number).toFloat() }
         settings["gravityMode"]?.let {
             config.gravityMode = try {
                 GravityMode.valueOf(it as String)

@@ -14,6 +14,7 @@ interface BounceDetectorConfig {
   sampleWindow: number;       // Number of samples to analyze
   audioMode: AudioFeedbackMode;  // Audio feedback mode
   audioVolume: number;        // Audio volume (0.0 to 1.0)
+  audioSensitivity: number;   // Max deviation for full pitch/volume response (m/s^2)
   gravityMode: GravityMode;   // How to detect gravity direction
 }
 
@@ -59,6 +60,8 @@ class BounceDetector {
   private audioModeSelect: HTMLSelectElement | null = null;
   private audioVolumeSlider: HTMLInputElement | null = null;
   private audioVolumeValue: HTMLElement | null = null;
+  private audioSensitivitySlider: HTMLInputElement | null = null;
+  private audioSensitivityValue: HTMLElement | null = null;
   private gravityModeSelect: HTMLSelectElement | null = null;
   private gravityModeHint: HTMLElement | null = null;
 
@@ -74,6 +77,7 @@ class BounceDetector {
       sampleWindow: 10,         // Analyze last 10 samples
       audioMode: 'off',         // Audio feedback off by default
       audioVolume: 0.5,         // 50% volume by default
+      audioSensitivity: 5.0,    // Default: 5 m/s² deviation = max pitch/volume
       gravityMode: 'sensor',    // Use device sensor by default (falls back to filter if unavailable)
       ...config
     };
@@ -98,6 +102,8 @@ class BounceDetector {
     this.audioModeSelect = document.getElementById('audio-mode') as HTMLSelectElement;
     this.audioVolumeSlider = document.getElementById('audio-volume') as HTMLInputElement;
     this.audioVolumeValue = document.getElementById('audio-volume-value');
+    this.audioSensitivitySlider = document.getElementById('audio-sensitivity') as HTMLInputElement;
+    this.audioSensitivityValue = document.getElementById('audio-sensitivity-value');
     this.gravityModeSelect = document.getElementById('gravity-mode') as HTMLSelectElement;
     this.gravityModeHint = document.getElementById('gravity-mode-hint');
   }
@@ -130,6 +136,15 @@ class BounceDetector {
       }
       if (this.gainNode) {
         this.gainNode.gain.value = value;
+      }
+      this.saveSettings();
+    });
+
+    this.audioSensitivitySlider?.addEventListener('input', (e) => {
+      const value = parseFloat((e.target as HTMLInputElement).value);
+      this.config.audioSensitivity = value;
+      if (this.audioSensitivityValue) {
+        this.audioSensitivityValue.textContent = value.toFixed(1);
       }
       this.saveSettings();
     });
@@ -520,11 +535,11 @@ class BounceDetector {
 
     // Map deviation to frequency:
     // - 0 deviation = 200 Hz (low, calm)
-    // - max deviation (e.g., 10 m/s²) = 1000 Hz (high, alert)
+    // - audioSensitivity deviation = 1000 Hz (high, alert)
     // Using a non-linear mapping for better perception
     const minFreq = 200;
     const maxFreq = 1000;
-    const maxDeviation = 10; // Maximum expected deviation in m/s²
+    const maxDeviation = this.config.audioSensitivity;
 
     const normalizedDeviation = Math.min(deviation / maxDeviation, 1);
     const frequency = minFreq + (maxFreq - minFreq) * normalizedDeviation;
@@ -542,10 +557,10 @@ class BounceDetector {
 
     // Map deviation to frequency (same as regular frequency mode):
     // - 0 deviation = 200 Hz (low, calm)
-    // - max deviation (e.g., 10 m/s²) = 1000 Hz (high, alert)
+    // - audioSensitivity deviation = 1000 Hz (high, alert)
     const minFreq = 200;
     const maxFreq = 1000;
-    const maxDeviation = 10; // Maximum expected deviation in m/s²
+    const maxDeviation = this.config.audioSensitivity;
 
     const normalizedDeviation = Math.min(deviation / maxDeviation, 1);
     const frequency = minFreq + (maxFreq - minFreq) * normalizedDeviation;
@@ -682,6 +697,7 @@ class BounceDetector {
       baselineMagnitude: this.baselineMagnitude,
       audioMode: this.config.audioMode,
       audioVolume: this.config.audioVolume,
+      audioSensitivity: this.config.audioSensitivity,
       gravityMode: this.config.gravityMode,
       // Save calibrated gravity direction
       gravityX: this.gravityX,
@@ -722,6 +738,15 @@ class BounceDetector {
           }
           if (this.audioVolumeValue) {
             this.audioVolumeValue.textContent = Math.round(settings.audioVolume * 100).toString();
+          }
+        }
+        if (settings.audioSensitivity !== undefined) {
+          this.config.audioSensitivity = settings.audioSensitivity;
+          if (this.audioSensitivitySlider) {
+            this.audioSensitivitySlider.value = settings.audioSensitivity.toString();
+          }
+          if (this.audioSensitivityValue) {
+            this.audioSensitivityValue.textContent = settings.audioSensitivity.toFixed(1);
           }
         }
         if (settings.gravityMode !== undefined) {

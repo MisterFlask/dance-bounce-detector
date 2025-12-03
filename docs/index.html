@@ -379,12 +379,12 @@
 
       <div class="slider-container">
         <div class="slider-header">
-          <span class="slider-label">Sensitivity</span>
+          <span class="slider-label">Bounce Detection Threshold</span>
           <span class="slider-value"><span id="sensitivity-value">3.0</span> m/s²</span>
         </div>
         <input type="range" id="sensitivity" min="1" max="8" step="0.5" value="3">
         <div class="slider-hints">
-          <span>More sensitive</span>
+          <span>More sensitive (vibrates more)</span>
           <span>Less sensitive</span>
         </div>
       </div>
@@ -413,6 +413,18 @@
         <div class="slider-hints">
           <span>Quiet</span>
           <span>Loud</span>
+        </div>
+      </div>
+
+      <div class="slider-container" id="audio-sensitivity-container">
+        <div class="slider-header">
+          <span class="slider-label">Audio Sensitivity</span>
+          <span class="slider-value"><span id="audio-sensitivity-value">5.0</span> m/s²</span>
+        </div>
+        <input type="range" id="audio-sensitivity" min="1" max="10" step="0.5" value="5">
+        <div class="slider-hints">
+          <span>More reactive (higher pitch)</span>
+          <span>Less reactive</span>
         </div>
       </div>
 
