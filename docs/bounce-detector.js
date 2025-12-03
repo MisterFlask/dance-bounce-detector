@@ -49,14 +49,23 @@ class BounceDetector {
             const gx = accWithGravity.x;
             const gy = accWithGravity.y;
             const gz = accWithGravity.z;
-            // Update gravity estimate with low-pass filter
-            // During calibration: use faster alpha (0.1) since phone is held still
-            // During detection: use very slow alpha (0.005) to track orientation changes
-            // while filtering out quick horizontal movements
-            const alpha = this.isCalibrating ? 0.1 : this.gravityAlpha;
-            this.gravityX = alpha * gx + (1 - alpha) * this.gravityX;
-            this.gravityY = alpha * gy + (1 - alpha) * this.gravityY;
-            this.gravityZ = alpha * gz + (1 - alpha) * this.gravityZ;
+            // If linear acceleration is available, compute gravity directly (no filtering needed!)
+            // gravity = accelerationIncludingGravity - linearAcceleration
+            // This uses the device's built-in sensor fusion which is much more accurate
+            if (linearAcc && linearAcc.x !== null && linearAcc.y !== null && linearAcc.z !== null) {
+                this.gravityX = gx - linearAcc.x;
+                this.gravityY = gy - linearAcc.y;
+                this.gravityZ = gz - linearAcc.z;
+            }
+            else {
+                // Fallback: estimate gravity with low-pass filter
+                // During calibration: use faster alpha (0.1) since phone is held still
+                // During detection: use very slow alpha (0.005) to track orientation changes
+                const alpha = this.isCalibrating ? 0.1 : this.gravityAlpha;
+                this.gravityX = alpha * gx + (1 - alpha) * this.gravityX;
+                this.gravityY = alpha * gy + (1 - alpha) * this.gravityY;
+                this.gravityZ = alpha * gz + (1 - alpha) * this.gravityZ;
+            }
             // Calculate gravity magnitude (should be ~9.81)
             const gravityMagnitude = Math.sqrt(this.gravityX * this.gravityX +
                 this.gravityY * this.gravityY +
