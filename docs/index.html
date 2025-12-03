@@ -415,6 +415,19 @@
           <span>Loud</span>
         </div>
       </div>
+
+      <div class="slider-container">
+        <div class="slider-header">
+          <span class="slider-label">Gravity Detection</span>
+        </div>
+        <select id="gravity-mode" class="audio-select">
+          <option value="sensor">Device Sensor (recommended)</option>
+          <option value="filter">Low-pass Filter</option>
+        </select>
+        <div class="audio-hints">
+          <span class="hint-text" id="gravity-mode-hint">Uses device's built-in sensor fusion for accurate gravity tracking</span>
+        </div>
+      </div>
     </div>
 
     <div class="instructions">
