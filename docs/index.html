@@ -418,6 +418,18 @@
 
       <div class="slider-container">
         <div class="slider-header">
+          <span class="slider-label">Audio Sensitivity</span>
+          <span class="slider-value"><span id="audio-sensitivity-value">5</span></span>
+        </div>
+        <input type="range" id="audio-sensitivity" min="1" max="10" step="1" value="5">
+        <div class="slider-hints">
+          <span>Less sensitive</span>
+          <span>More sensitive</span>
+        </div>
+      </div>
+
+      <div class="slider-container">
+        <div class="slider-header">
           <span class="slider-label">Gravity Detection</span>
         </div>
         <select id="gravity-mode" class="audio-select">

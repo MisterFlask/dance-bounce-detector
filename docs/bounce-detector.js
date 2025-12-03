@@ -37,6 +37,8 @@ class BounceDetector {
         this.audioModeSelect = null;
         this.audioVolumeSlider = null;
         this.audioVolumeValue = null;
+        this.audioSensitivitySlider = null;
+        this.audioSensitivityValue = null;
         this.gravityModeSelect = null;
         this.gravityModeHint = null;
         this.bounceCount = 0;
@@ -147,6 +149,7 @@ class BounceDetector {
             sampleWindow: 10, // Analyze last 10 samples
             audioMode: 'off', // Audio feedback off by default
             audioVolume: 0.5, // 50% volume by default
+            audioSensitivity: 5, // Default audio sensitivity (1=less sensitive, 10=more sensitive)
             gravityMode: 'sensor', // Use device sensor by default (falls back to filter if unavailable)
             ...config
         };
@@ -169,6 +172,8 @@ class BounceDetector {
         this.audioModeSelect = document.getElementById('audio-mode');
         this.audioVolumeSlider = document.getElementById('audio-volume');
         this.audioVolumeValue = document.getElementById('audio-volume-value');
+        this.audioSensitivitySlider = document.getElementById('audio-sensitivity');
+        this.audioSensitivityValue = document.getElementById('audio-sensitivity-value');
         this.gravityModeSelect = document.getElementById('gravity-mode');
         this.gravityModeHint = document.getElementById('gravity-mode-hint');
     }
@@ -197,6 +202,14 @@ class BounceDetector {
             }
             if (this.gainNode) {
                 this.gainNode.gain.value = value;
+            }
+            this.saveSettings();
+        });
+        this.audioSensitivitySlider?.addEventListener('input', (e) => {
+            const value = parseFloat(e.target.value);
+            this.config.audioSensitivity = value;
+            if (this.audioSensitivityValue) {
+                this.audioSensitivityValue.textContent = value.toFixed(0);
             }
             this.saveSettings();
         });
@@ -443,6 +456,10 @@ class BounceDetector {
     updateFrequencyFromDeviation(deviation) {
         if (!this.oscillator || this.config.audioMode !== 'frequency')
             return;
+        // Scale deviation by audio sensitivity
+        // At sensitivity=5 (default), no change. Higher=more sensitive, lower=less sensitive
+        const sensitivityMultiplier = this.config.audioSensitivity / 5;
+        const scaledDeviation = deviation * sensitivityMultiplier;
         // Map deviation to frequency:
         // - 0 deviation = 200 Hz (low, calm)
         // - max deviation (e.g., 10 m/s²) = 1000 Hz (high, alert)
@@ -450,7 +467,7 @@ class BounceDetector {
         const minFreq = 200;
         const maxFreq = 1000;
         const maxDeviation = 10; // Maximum expected deviation in m/s²
-        const normalizedDeviation = Math.min(deviation / maxDeviation, 1);
+        const normalizedDeviation = Math.min(scaledDeviation / maxDeviation, 1);
         const frequency = minFreq + (maxFreq - minFreq) * normalizedDeviation;
         // Smooth frequency transition
         this.oscillator.frequency.setTargetAtTime(frequency, this.audioContext.currentTime, 0.05 // Time constant for smooth transition
@@ -459,13 +476,17 @@ class BounceDetector {
     updateFrequencyFadeoutFromDeviation(deviation) {
         if (!this.oscillator || !this.oscillatorGainNode || this.config.audioMode !== 'frequency-fadeout')
             return;
+        // Scale deviation by audio sensitivity
+        // At sensitivity=5 (default), no change. Higher=more sensitive, lower=less sensitive
+        const sensitivityMultiplier = this.config.audioSensitivity / 5;
+        const scaledDeviation = deviation * sensitivityMultiplier;
         // Map deviation to frequency (same as regular frequency mode):
         // - 0 deviation = 200 Hz (low, calm)
         // - max deviation (e.g., 10 m/s²) = 1000 Hz (high, alert)
         const minFreq = 200;
         const maxFreq = 1000;
         const maxDeviation = 10; // Maximum expected deviation in m/s²
-        const normalizedDeviation = Math.min(deviation / maxDeviation, 1);
+        const normalizedDeviation = Math.min(scaledDeviation / maxDeviation, 1);
         const frequency = minFreq + (maxFreq - minFreq) * normalizedDeviation;
         // Smooth frequency transition
         this.oscillator.frequency.setTargetAtTime(frequency, this.audioContext.currentTime, 0.05 // Time constant for smooth transition
@@ -567,6 +588,7 @@ class BounceDetector {
             baselineMagnitude: this.baselineMagnitude,
             audioMode: this.config.audioMode,
             audioVolume: this.config.audioVolume,
+            audioSensitivity: this.config.audioSensitivity,
             gravityMode: this.config.gravityMode,
             // Save calibrated gravity direction
             gravityX: this.gravityX,
@@ -606,6 +628,15 @@ class BounceDetector {
                     }
                     if (this.audioVolumeValue) {
                         this.audioVolumeValue.textContent = Math.round(settings.audioVolume * 100).toString();
+                    }
+                }
+                if (settings.audioSensitivity !== undefined) {
+                    this.config.audioSensitivity = settings.audioSensitivity;
+                    if (this.audioSensitivitySlider) {
+                        this.audioSensitivitySlider.value = settings.audioSensitivity.toString();
+                    }
+                    if (this.audioSensitivityValue) {
+                        this.audioSensitivityValue.textContent = settings.audioSensitivity.toFixed(0);
                     }
                 }
                 if (settings.gravityMode !== undefined) {
