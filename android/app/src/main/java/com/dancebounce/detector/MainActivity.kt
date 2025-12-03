@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.material3.ExperimentalMaterial3Api
 
 // Colors matching the original web app
 val BackgroundDark = Color(0xFF1a1a2e)
@@ -458,6 +459,7 @@ class MainActivity : ComponentActivity(), BounceDetectorListener {
         }
     }
 
+    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     fun AudioModeSelector(
         selectedMode: AudioFeedbackMode,
@@ -491,6 +493,7 @@ class MainActivity : ComponentActivity(), BounceDetectorListener {
         }
     }
 
+    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     fun GravityModeSelector(
         selectedMode: GravityMode,
