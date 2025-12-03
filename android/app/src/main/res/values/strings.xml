@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Dance Bounce Detector</string>
+    <string name="notification_channel_name">Bounce Detection</string>
+    <string name="notification_channel_description">Shows when bounce detection is active</string>
+    <string name="notification_title">Detecting Bounces</string>
+    <string name="notification_text">Tap to return to app</string>
+</resources>
